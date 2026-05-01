@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>محرر الصور الذكي</title>
+    
+    <!-- مكتبة التصميم Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- مكتبة الأيقونات Lucide -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- مكتبة الذكاء الاصطناعي -->
+    <script src="https://unpkg.com/@imgly/background-removal@1.4.3/dist/imgly-background-removal.browser.min.js"></script>
+
+    <!-- خط كايرو -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #f1f5f9;
+            /* منع السحب والتكبير العشوائي على الهواتف */
+            touch-action: manipulation;
+        }
+        
+        .canvas-container {
+            background-image: 
+                linear-gradient(45deg, #e2e8f0 25%, transparent 25%), 
+                linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #e2e8f0 75%), 
+                linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-slate-800">
+
+    <!-- الشريط العلوي (يحتوي على زر الحفظ ليكون واضحاً دائماً) -->
+    <header class="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm z-20">
+        <div class="flex items-center gap-2">
+            <div class="bg-indigo-600 p-1.5 rounded-lg text-white">
+                <i data-lucide="sparkles" class="w-5 h-5"></i>
+            </div>
+            <h1 class="text-lg font-bold text-slate-900 hidden sm:block">المحرر الذكي</h1>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- زر رفع صورة جديد -->
+            <label class="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors text-sm">
+                <i data-lucide="upload" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">صورة جديدة</span>
+                <input type="file" id="imageInput" accept="image/*" class="hidden">
+            </label>
+
+            <!-- زر الحفظ (أخضر وبارز) -->
+            <button onclick="downloadImage()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 text-sm">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                حفظ
+            </button>
+        </div>
+    </header>
+
+    <!-- منطقة عرض الصورة -->
+    <main class="flex-1 canvas-container relative flex items-center justify-center p-4 overflow-hidden">
+        
+        <canvas id="imageCanvas" class="hidden rounded-lg"></canvas>
+        
+        <!-- رسالة البداية (تظهر قبل رفع الصورة) -->
+        <label id="uploadPrompt" for="imageInput" class="absolute inset-4 border-2 border-dashed border-indigo-300 bg-white/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors z-10">
+            <div class="bg-indigo-100 p-4 rounded-full text-indigo-600 mb-4 animate-bounce">
+                <i data-lucide="image-plus" class="w-8 h-8"></i>
+            </div>
+            <h2 class="text-xl font-bold text-slate-800 mb-2">اضغط هنا لاختيار صورة</h2>
+            <p class="text-slate-500 text-sm text-center px-4">لتعديلها بالذكاء الاصطناعي وقصها</p>
+        </label>
+
+    </main>
+
+    <!-- شريط الأدوات السفلي (ممتاز للهواتف) -->
+    <footer class="bg-white border-t border-slate-200 p-3 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
+        <div class="flex gap-2 max-w-md mx-auto">
+            
+            <button onclick="smartRemoveBg()" class="flex-1 flex flex-col items-center justify-center gap-1 bg-indigo-50 text-indigo-700 p-2 rounded-xl hover:bg-indigo-100 transition-colors active:scale-95">
+                <i data-lucide="user-check" class="w-6 h-6"></i>
+                <span class="text-[10px] font-bold text-center">عزل ذكي (أبيض)</span>
+            </button>
+
+            <button onclick="cropTo4x6()" class="flex-1 flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-colors active:scale-95 border border-slate-200">
+                <i data-lucide="crop" class="w-6 h-6"></i>
+                <span class="text-[10px] font-bold text-center">قص 4:6</span>
+            </button>
+
+            <button onclick="resetImage()" class="flex-1 flex flex-col items-center justify-center gap-1 bg-slate-50 text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-colors active:scale-95 border border-slate-200">
+                <i data-lucide="rotate-ccw" class="w-6 h-6"></i>
+                <span class="text-[10px] font-bold text-center">تراجع</span>
+            </button>
+            
+        </div>
+    </footer>
+
+    <!-- شاشة التحميل -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-2xl flex flex-col items-center w-[90%] max-w-sm shadow-2xl">
+            <div class="relative w-16 h-16 mb-4">
+                <div class="absolute inset-0 rounded-full border-4 border-slate-100"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
+                <i data-lucide="bot" class="absolute inset-0 m-auto w-6 h-6 text-indigo-600"></i>
+            </div>
+            <h3 class="text-lg font-bold text-slate-800 mb-2">الذكاء الاصطناعي يعمل...</h3>
+            <p id="loadingText" class="text-slate-500 text-center text-sm">جاري فصل الأشخاص بدقة، قد يستغرق الأمر ثواني معدودة.</p>
+        </div>
+    </div>
+
+    <!-- نافذة التنبيهات -->
+    <div id="customAlert" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4 transition-opacity duration-300 opacity-0">
+        <div class="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl transform transition-transform duration-300 scale-95" id="alertBox">
+            <div id="alertIcon" class="flex items-center justify-center mb-4"></div>
+            <h3 class="text-lg font-bold text-center text-slate-800 mb-2" id="alertTitle"></h3>
+            <p class="text-center text-slate-600 text-sm mb-6 leading-relaxed" id="alertMessage"></p>
+            <button onclick="closeAlert()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-colors">
+                مفهوم
+            </button>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        const canvas = document.getElementById('imageCanvas');
+        const ctx = canvas.getContext('2d');
+        let originalImageObj = null;
+        let isImageLoaded = false;
+        let currentObjectUrl = null;
+
+        // معالجة رفع الصورة
+        document.addEventListener('change', function(e) {
+            if(e.target && e.target.id === 'imageInput') {
+                const file = e.target.files[0];
+                if (file) {
+                    if(currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
+                    currentObjectUrl = URL.createObjectURL(file);
+                    
+                    const img = new Image();
+                    img.onload = function() {
+                        originalImageObj = img;
+                        isImageLoaded = true;
+                        
+                        document.getElementById('uploadPrompt').classList.add('hidden');
+                        canvas.classList.remove('hidden');
+                        
+                        drawImageToCanvas(img);
+                    }
+                    img.src = currentObjectUrl;
+                }
+            }
+        });
+
+        function drawImageToCanvas(img) {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+        }
+
+        // أداة الذكاء الاصطناعي (مع معالجة الأخطاء لبيئة المعاينة)
+        async function smartRemoveBg() {
+            if (!isImageLoaded) {
+                showAlert("عذراً!", "يجب اختيار صورة أولاً.", "image");
+                return;
+            }
+
+            showLoading();
+
+            try {
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+                
+                // استخدام الإعدادات الافتراضية للمكتبة (أفضل للـ CORS)
+                const imageBlob = await imglyRemoveBackground(blob);
+                const url = URL.createObjectURL(imageBlob);
+
+                const img = new Image();
+                img.onload = () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    // خلفية بيضاء صلبة
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    // رسم الشخص بدون خلفية
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    hideLoading();
+                    showAlert("تمت العملية!", "تم عزل الأشخاص بنجاح ووضع خلفية بيضاء.", "check-circle", "text-emerald-500");
+                };
+                img.src = url;
+
+            } catch (error) {
+                console.error("AI Error:", error);
+                hideLoading();
+                // رسالة مخصصة لبيئة المعاينة
+                showAlert(
+                    "خطأ في بيئة المعاينة", 
+                    "لا يمكن تحميل نماذج الذكاء الاصطناعي أثناء استخدام 'متصفح المعاينة' أو فتح الملف محلياً بسبب قيود الأمان (CORS). لتعمل الميزة بالكامل، يجب رفع هذا الكود على استضافة ويب حقيقية.", 
+                    "shield-alert", 
+                    "text-amber-500"
+                );
+            }
+        }
+
+        // أداة قص الصورة لنسبة 4:6
+        function cropTo4x6() {
+            if (!isImageLoaded) {
+                showAlert("عذراً!", "يجب اختيار صورة أولاً.", "image");
+                return;
+            }
+
+            const currentW = canvas.width;
+            const currentH = canvas.height;
+            const targetRatio = 4 / 6; 
+            const currentRatio = currentW / currentH;
+
+            let newW, newH;
+
+            if (currentRatio > targetRatio) {
+                newH = currentH;
+                newW = currentH * targetRatio;
+            } else {
+                newW = currentW;
+                newH = currentW / targetRatio;
+            }
+
+            const startX = (currentW - newW) / 2;
+            const startY = (currentH - newH) / 2;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = newW;
+            tempCanvas.height = newH;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            tempCtx.drawImage(canvas, startX, startY, newW, newH, 0, 0, newW, newH);
+
+            canvas.width = newW;
+            canvas.height = newH;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(tempCanvas, 0, 0);
+
+            showAlert("تم القص", "تم ضبط أبعاد الصورة لمقاس 4:6 بنجاح.", "crop", "text-indigo-500");
+        }
+
+        function resetImage() {
+            if (!isImageLoaded || !originalImageObj) return;
+            drawImageToCanvas(originalImageObj);
+        }
+
+        // تحميل الصورة (حفظ)
+        function downloadImage() {
+            if (!isImageLoaded) {
+                showAlert("عذراً!", "لا توجد صورة لحفظها.", "image");
+                return;
+            }
+            
+            // تحويل محتوى الكانفاس إلى صورة وتحميلها
+            try {
+                const dataUrl = canvas.toDataURL('image/jpeg', 1.0);
+                const link = document.createElement('a');
+                link.download = 'edited_photo.jpg';
+                link.href = dataUrl;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (e) {
+                showAlert("خطأ", "حدث خطأ أثناء حفظ الصورة.", "alert-triangle", "text-red-500");
+            }
+        }
+
+        // أدوات مساعدة للواجهة
+        function showLoading() {
+            const el = document.getElementById('loadingOverlay');
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+        }
+
+        function hideLoading() {
+            const el = document.getElementById('loadingOverlay');
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        }
+
+        function showAlert(title, message, iconName = "info", iconColorClass = "text-indigo-500") {
+            document.getElementById('alertTitle').innerText = title;
+            document.getElementById('alertMessage').innerText = message;
+            
+            const iconDiv = document.getElementById('alertIcon');
+            iconDiv.innerHTML = `<i data-lucide="${iconName}" class="w-12 h-12 ${iconColorClass}"></i>`;
+            lucide.createIcons();
+
+            const alertEl = document.getElementById('customAlert');
+            const boxEl = document.getElementById('alertBox');
+            
+            alertEl.classList.remove('hidden');
+            alertEl.classList.add('flex');
+            
+            // تحريك للظهور
+            requestAnimationFrame(() => {
+                alertEl.classList.remove('opacity-0');
+                boxEl.classList.remove('scale-95');
+                boxEl.classList.add('scale-100');
+            });
+        }
+
+        function closeAlert() {
+            const alertEl = document.getElementById('customAlert');
+            const boxEl = document.getElementById('alertBox');
+            
+            alertEl.classList.add('opacity-0');
+            boxEl.classList.remove('scale-100');
+            boxEl.classList.add('scale-95');
+            
+            setTimeout(() => {
+                alertEl.classList.add('hidden');
+                alertEl.classList.remove('flex');
+            }, 300);
+        }
+    </script>
+</body>
+</html>
