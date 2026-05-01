@@ -5,16 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>محرر الصور الذكي</title>
     
-    <!-- Tailwind CSS -->
+    <!-- مكتبات التصميم والأيقونات -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- AI Background Removal -->
+    <!-- مكتبة الذكاء الاصطناعي -->
     <script src="https://unpkg.com/@imgly/background-removal@1.4.3/dist/imgly-background-removal.browser.min.js"></script>
 
-    <!-- Cairo Font -->
+    <!-- خطوط عربية -->
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
 
     <style>
@@ -22,7 +20,6 @@
             font-family: 'Cairo', sans-serif;
             background-color: #f1f5f9;
             touch-action: manipulation;
-            /* استخدام dvh يحل مشكلة شريط المتصفح على الهواتف */
             height: 100dvh; 
             margin: 0;
             padding: 0;
@@ -44,9 +41,9 @@
             max-height: 100%;
             object-fit: contain;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 0.5rem;
         }
 
-        /* لضمان مساحة كافية للشريط السفلي على أجهزة الايفون */
         .pb-safe {
             padding-bottom: env(safe-area-inset-bottom, 1rem);
         }
@@ -54,7 +51,7 @@
 </head>
 <body class="flex flex-col text-slate-800">
 
-    <!-- الشريط العلوي (يحتوي على زر الحفظ) -->
+    <!-- الشريط العلوي -->
     <header class="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-sm z-20 flex-shrink-0">
         <div class="flex items-center gap-2">
             <div class="bg-indigo-600 p-1.5 rounded-lg text-white">
@@ -67,7 +64,7 @@
             <label class="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition-colors text-sm">
                 <i data-lucide="upload" class="w-4 h-4"></i>
                 <span>صورة جديدة</span>
-                <input type="file" id="imageInput" accept="image/*" class="hidden">
+                <input type="file" id="imageInput" accept="image/jpeg, image/png, image/webp" class="hidden">
             </label>
 
             <button onclick="downloadImage()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-2 rounded-lg font-bold flex items-center gap-2 shadow-md transition-all active:scale-95 text-sm">
@@ -80,10 +77,9 @@
     <!-- منطقة عرض الصورة -->
     <main class="flex-1 canvas-container relative flex items-center justify-center p-4 overflow-hidden">
         
-        <canvas id="imageCanvas" class="hidden rounded-lg"></canvas>
+        <canvas id="imageCanvas" class="hidden"></canvas>
         
-        <!-- رسالة البداية -->
-        <label id="uploadPrompt" for="imageInput" class="absolute inset-4 sm:inset-10 border-2 border-dashed border-indigo-300 bg-white/80 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors z-10">
+        <label id="uploadPrompt" for="imageInput" class="absolute inset-4 sm:inset-10 border-2 border-dashed border-indigo-300 bg-white/90 backdrop-blur-sm rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-white transition-colors z-10">
             <div class="bg-indigo-100 p-4 rounded-full text-indigo-600 mb-4 animate-bounce">
                 <i data-lucide="image-plus" class="w-8 h-8"></i>
             </div>
@@ -123,8 +119,8 @@
                 <div class="absolute inset-0 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin"></div>
                 <i data-lucide="bot" class="absolute inset-0 m-auto w-6 h-6 text-indigo-600"></i>
             </div>
-            <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">الذكاء الاصطناعي يعمل...</h3>
-            <p id="loadingText" class="text-slate-500 text-center text-sm">جاري فصل الأشخاص بدقة، قد يستغرق الأمر ثواني معدودة.</p>
+            <h3 class="text-lg font-bold text-slate-800 mb-2 text-center" id="loadingTitle">الذكاء الاصطناعي يعمل...</h3>
+            <p id="loadingText" class="text-slate-500 text-center text-sm">جاري فصل الأشخاص بدقة، يرجى الانتظار (المرة الأولى قد تستغرق وقتاً أطول لتحميل النماذج).</p>
         </div>
     </div>
 
@@ -133,42 +129,54 @@
         <div class="bg-white p-6 rounded-2xl w-full max-w-sm shadow-2xl transform transition-transform duration-300 scale-95" id="alertBox">
             <div id="alertIcon" class="flex items-center justify-center mb-4"></div>
             <h3 class="text-lg font-bold text-center text-slate-800 mb-2" id="alertTitle"></h3>
-            <p class="text-center text-slate-600 text-sm mb-6 leading-relaxed" id="alertMessage"></p>
+            <p class="text-center text-slate-600 text-sm mb-6 leading-relaxed overflow-auto max-h-32" id="alertMessage"></p>
             <button onclick="closeAlert()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl transition-colors">
-                مفهوم
+                حسناً
             </button>
         </div>
     </div>
 
     <script>
+        // تفعيل الأيقونات
         lucide.createIcons();
 
         const canvas = document.getElementById('imageCanvas');
         const ctx = canvas.getContext('2d');
+        const imageInput = document.getElementById('imageInput');
+        
         let originalImageObj = null;
         let isImageLoaded = false;
-        let currentObjectUrl = null;
 
-        document.addEventListener('change', function(e) {
-            if(e.target && e.target.id === 'imageInput') {
-                const file = e.target.files[0];
-                if (file) {
-                    if(currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
-                    currentObjectUrl = URL.createObjectURL(file);
+        // الطريقة الأكثر أماناً لرفع الصورة بدون مشاكل CORS
+        imageInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            
+            reader.onload = function(event) {
+                const img = new Image();
+                // لضمان عدم حدوث مشاكل في الكانفاس لاحقاً
+                img.crossOrigin = "Anonymous"; 
+                
+                img.onload = function() {
+                    originalImageObj = img;
+                    isImageLoaded = true;
                     
-                    const img = new Image();
-                    img.onload = function() {
-                        originalImageObj = img;
-                        isImageLoaded = true;
-                        
-                        document.getElementById('uploadPrompt').classList.add('hidden');
-                        canvas.classList.remove('hidden');
-                        
-                        drawImageToCanvas(img);
-                    }
-                    img.src = currentObjectUrl;
+                    document.getElementById('uploadPrompt').classList.add('hidden');
+                    canvas.classList.remove('hidden');
+                    
+                    drawImageToCanvas(img);
                 }
-            }
+                
+                img.onerror = function() {
+                    showAlert("خطأ", "لم نتمكن من قراءة الصورة. يرجى محاولة رفع صورة بصيغة أخرى (JPG أو PNG).", "alert-triangle", "text-red-500");
+                }
+
+                img.src = event.target.result;
+            };
+
+            reader.readAsDataURL(file);
         });
 
         function drawImageToCanvas(img) {
@@ -178,88 +186,119 @@
             ctx.drawImage(img, 0, 0);
         }
 
+        // أداة العزل الذكي (مع إعدادات السيرفر السحابي)
         async function smartRemoveBg() {
             if (!isImageLoaded) {
-                showAlert("تنبيه", "الرجاء اختيار صورة أولاً قبل التعديل.", "image");
+                showAlert("تنبيه", "الرجاء اختيار صورة أولاً.", "image");
                 return;
             }
 
             showLoading();
 
             try {
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+                // تحويل محتوى الكانفاس الحالي إلى Blob بأمان
+                const blob = await new Promise((resolve, reject) => {
+                    canvas.toBlob((b) => {
+                        if (b) resolve(b);
+                        else reject(new Error("فشل تحويل الصورة"));
+                    }, 'image/jpeg', 1.0);
+                });
                 
-                const imageBlob = await imglyRemoveBackground(blob);
+                // إعدادات ضرورية جداً عند الرفع على GitHub Pages لجلب الملفات من مسارها الصحيح
+                const config = {
+                    publicPath: "https://unpkg.com/@imgly/background-removal@1.4.3/dist/"
+                };
+
+                // استدعاء الذكاء الاصطناعي
+                const imageBlob = await imglyRemoveBackground(blob, config);
                 const url = URL.createObjectURL(imageBlob);
 
                 const img = new Image();
                 img.onload = () => {
+                    // تفريغ الكانفاس
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // رسم الخلفية البيضاء
                     ctx.fillStyle = "#ffffff";
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // رسم الشخص بدون خلفيته
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     
                     hideLoading();
-                    showAlert("تمت العملية بنجاح!", "تم عزل الأشخاص ووضع خلفية بيضاء.", "check-circle", "text-emerald-500");
+                    showAlert("تمت العملية بنجاح!", "تم عزل الأشخاص وتطبيق خلفية بيضاء.", "check-circle", "text-emerald-500");
+                    
+                    // تنظيف الذاكرة
+                    URL.revokeObjectURL(url);
                 };
                 img.src = url;
 
             } catch (error) {
-                console.error("AI Error:", error);
+                console.error("AI Error Details:", error);
                 hideLoading();
                 showAlert(
-                    "قيود متصفح المعاينة", 
-                    "لا يمكن تحميل نماذج الذكاء الاصطناعي هنا لأسباب أمنية (CORS). يرجى رفع الكود على استضافة ويب حقيقية لتعمل ميزة العزل الذكي.", 
-                    "shield-alert", 
-                    "text-amber-500"
+                    "حدث خطأ في المعالجة", 
+                    "التفاصيل: " + (error.message || "تأكد من اتصالك بالإنترنت. قد تحتاج لتحديث الصفحة والمحاولة مرة أخرى."), 
+                    "alert-triangle", 
+                    "text-red-500"
                 );
             }
         }
 
+        // أداة قص الصورة لنسبة 4:6 (مضادة للأخطاء الرياضية)
         function cropTo4x6() {
             if (!isImageLoaded) {
-                showAlert("تنبيه", "الرجاء اختيار صورة أولاً للقص.", "image");
+                showAlert("تنبيه", "الرجاء اختيار صورة أولاً.", "image");
                 return;
             }
 
-            const currentW = canvas.width;
-            const currentH = canvas.height;
-            const targetRatio = 4 / 6; 
-            const currentRatio = currentW / currentH;
+            try {
+                const currentW = canvas.width;
+                const currentH = canvas.height;
+                const targetRatio = 4 / 6; 
+                const currentRatio = currentW / currentH;
 
-            let newW, newH;
+                let newW, newH;
 
-            if (currentRatio > targetRatio) {
-                newH = currentH;
-                newW = currentH * targetRatio;
-            } else {
-                newW = currentW;
-                newH = currentW / targetRatio;
+                if (currentRatio > targetRatio) {
+                    newH = currentH;
+                    newW = currentH * targetRatio;
+                } else {
+                    newW = currentW;
+                    newH = currentW / targetRatio;
+                }
+
+                const startX = (currentW - newW) / 2;
+                const startY = (currentH - newH) / 2;
+
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = newW;
+                tempCanvas.height = newH;
+                const tempCtx = tempCanvas.getContext('2d');
+
+                // رسم الجزء المطلوب قصه في الكانفاس المؤقت
+                tempCtx.drawImage(canvas, startX, startY, newW, newH, 0, 0, newW, newH);
+
+                // نقل الصورة المقصوصة إلى الكانفاس الرئيسي
+                canvas.width = newW;
+                canvas.height = newH;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(tempCanvas, 0, 0);
+
+                showAlert("تم القص", "تم ضبط مقاس الصورة إلى نسبة 4:6.", "crop", "text-indigo-500");
+            } catch (error) {
+                console.error("Crop Error:", error);
+                showAlert("خطأ في القص", "لم نتمكن من قص الصورة، التفاصيل: " + error.message, "alert-triangle", "text-red-500");
             }
-
-            const startX = (currentW - newW) / 2;
-            const startY = (currentH - newH) / 2;
-
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = newW;
-            tempCanvas.height = newH;
-            const tempCtx = tempCanvas.getContext('2d');
-
-            tempCtx.drawImage(canvas, startX, startY, newW, newH, 0, 0, newW, newH);
-
-            canvas.width = newW;
-            canvas.height = newH;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(tempCanvas, 0, 0);
-
-            showAlert("تم القص", "تم ضبط مقاس الصورة إلى 4:6.", "crop", "text-indigo-500");
         }
 
+        // استعادة الصورة
         function resetImage() {
             if (!isImageLoaded || !originalImageObj) return;
             drawImageToCanvas(originalImageObj);
         }
 
+        // تحميل الصورة
         function downloadImage() {
             if (!isImageLoaded) {
                 showAlert("تنبيه", "لا توجد صورة لحفظها.", "image");
@@ -267,17 +306,21 @@
             }
             
             try {
+                // استخدام JPEG بجودة كاملة
                 const dataUrl = canvas.toDataURL('image/jpeg', 1.0);
                 const link = document.createElement('a');
-                link.download = 'edited_photo.jpg';
+                link.download = 'ID_Photo_Edited.jpg';
                 link.href = dataUrl;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
-            } catch (e) {
-                showAlert("خطأ", "حدث خطأ أثناء حفظ الصورة.", "alert-triangle", "text-red-500");
+            } catch (error) {
+                console.error("Download Error:", error);
+                showAlert("خطأ في التحميل", "لا يمكن تحميل الصورة حالياً.", "alert-triangle", "text-red-500");
             }
         }
+
+        // --- أدوات الواجهة والتنبيهات --- //
 
         function showLoading() {
             const el = document.getElementById('loadingOverlay');
